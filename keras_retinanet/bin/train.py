@@ -508,7 +508,8 @@ def main(args=None):
         workers=args.workers,
         use_multiprocessing=use_multiprocessing,
         max_queue_size=args.max_queue_size,
-        validation_data=validation_generator
+        validation_data=validation_generator,
+        initial_epoch=int(args.snapshot[-5:-3]) if args.snapshot is not None else 0
     )
 
 
