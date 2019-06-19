@@ -11,3 +11,7 @@ __pycache__/
 logs/
 .ipynb_checkpoints/
 playground.ipynb
+build/
+*.pyd
+*.pyx
+*.zip
