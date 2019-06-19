@@ -13,5 +13,4 @@ logs/
 playground.ipynb
 build/
 *.pyd
-*.pyx
 *.zip
