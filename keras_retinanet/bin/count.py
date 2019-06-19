@@ -7,7 +7,6 @@ import numpy as np
 import time
 import csv
 import argparse
-import matplotlib.pyplot as plt
 from sort import Sort
 
 import tensorflow as tf
@@ -65,11 +64,16 @@ def show_frame_and_get_line(first_frame):
 			cv2.destroyWindow('Frame')
 			break
 
-cv2.namedWindow('Frame')
-cv2.setMouseCallback('Frame', get_coordinate)
+def draw_counter(img, counter, classes):
+
+	for i, c in enumerate(counter):
+		text = "{}:{}".format(classes[i], counter[i])
+		cv2.putText(img, text, (100, 1400 - 150*i), 0, 5, (0, 0, 0), 4)
+		cv2.putText(img, text, (100, 1400 - 150*i), 0, 5, (255, 255, 255), 2)
+
 
 parser = argparse.ArgumentParser(description='Count vehicles on videos')
-parser.add_argument('-i','--input_path', type=str, help='Full input path to video')
+parser.add_argument('input_path', type=str, help='Full input path to video')
 parser.add_argument('-o','--output_path', type=str, help='Full output path to predictions')
 parser.add_argument('-m', '--model_path', type=str, default='snapshots/inference_model.h5', help='Full path to trained model')
 parser.add_argument('-b', '--backbone', type=str, default='resnet50', help='Backbone name')
@@ -78,6 +82,10 @@ parser.add_argument('--min_side', type=int, default=800)
 parser.add_argument('--max_side', type=int, default=1333)
 
 args=parser.parse_args()
+
+cv2.namedWindow('Frame', cv2.WINDOW_NORMAL)
+cv2.resizeWindow('Frame', args.max_side, args.min_side)
+cv2.setMouseCallback('Frame', get_coordinate)
 
 cap = cv2.VideoCapture(args.input_path)
 ret, first_frame = cap.read()
@@ -88,14 +96,14 @@ trackers = get_trackers(classes)
 memory = {}
 counter = [0] * len(classes)
 
+show_frame_and_get_line(first_frame)
+
 cv2.namedWindow('Predictions', cv2.WINDOW_NORMAL)
 cv2.resizeWindow('Predictions', args.max_side,args.min_side)
 
 if args.output_path:
 	fourcc = cv2.VideoWriter_fourcc(*"MP4V")
 	writer = cv2.VideoWriter(args.output_path, fourcc, 30, (frame.shape[1], frame.shape[0]), True)
-
-show_frame_and_get_line(first_frame)
 
 while ret:
 
@@ -110,7 +118,7 @@ while ret:
 	start = time.time()
 	boxes, scores, labels = model.predict_on_batch(np.expand_dims(frame, axis=0))
 	print("processing time: ", time.time() - start)
-	print(counter)
+
 
 	boxes, scores, labels = boxes[0][scores[0]>args.conf], np.expand_dims(scores[0][scores[0]>args.conf], axis=1), labels[0][scores[0]>args.conf]
 	boxes /= scale
@@ -147,6 +155,8 @@ while ret:
 			
 			caption = "{} {}".format(classes[class_id], box[4])
 			draw_caption(draw, b, caption)
+
+			draw_counter(draw, counter, classes)
 
 	if writer:
 		writer.write(draw)

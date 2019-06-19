@@ -7,7 +7,6 @@ import numpy as np
 import time
 import csv
 import argparse
-import matplotlib.pyplot as plt
 
 import tensorflow as tf
 
@@ -40,7 +39,7 @@ def get_labels(path):
 	return labels
 
 parser = argparse.ArgumentParser(description='Detect vehicles on videos')
-parser.add_argument('-i','--input_path', type=str, help='Full input path to video')
+parser.add_argument('input_path', type=str, help='Full input path to video')
 parser.add_argument('-o','--output_path', type=str, help='Full output path to predictions')
 parser.add_argument('-m', '--model_path', type=str, default='snapshots/inference_model.h5', help='Full path to trained model')
 parser.add_argument('-b', '--backbone', type=str, default='resnet50', help='Backbone name')
