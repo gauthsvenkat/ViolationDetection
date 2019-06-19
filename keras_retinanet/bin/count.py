@@ -8,6 +8,7 @@ import time
 import csv
 import argparse
 import matplotlib.pyplot as plt
+from sort import Sort
 
 import tensorflow as tf
 
@@ -39,21 +40,53 @@ def get_labels(path):
 
 	return labels
 
-parser = argparse.ArgumentParser(description='Detect vehicles on videos')
+def get_trackers(class_ids):
+	trackers = {}
+	for i in classes:
+		trackers[i] = Sort()
+	return trackers
+
+def intersect(A,B,C,D):
+	return ccw(A,C,D) != ccw(B,C,D) and ccw(A,B,C) != ccw(A,B,D)
+
+def ccw(A,B,C):
+	return (C[1]-A[1]) * (B[0]-A[0]) > (B[1]-A[1]) * (C[0]-A[0])
+
+line = []
+def get_coordinate(event,x,y,flags,param):
+	if event == cv2.EVENT_LBUTTONDOWN:
+		cv2.circle(first_frame, (x,y), 10, (0,0,255), 5)
+		line.append((x,y))
+
+def show_frame_and_get_line(first_frame):
+	while True:
+		cv2.imshow('Frame', first_frame)
+		if cv2.waitKey(20) & 0xFF == ord('c'):
+			cv2.destroyWindow('Frame')
+			break
+
+cv2.namedWindow('Frame')
+cv2.setMouseCallback('Frame', get_coordinate)
+
+parser = argparse.ArgumentParser(description='Count vehicles on videos')
 parser.add_argument('-i','--input_path', type=str, help='Full input path to video')
 parser.add_argument('-o','--output_path', type=str, help='Full output path to predictions')
 parser.add_argument('-m', '--model_path', type=str, default='snapshots/inference_model.h5', help='Full path to trained model')
 parser.add_argument('-b', '--backbone', type=str, default='resnet50', help='Backbone name')
+parser.add_argument('--conf', type=float, default=0.9, help='Filter out prediciotns lesser than this confidence')
 parser.add_argument('--min_side', type=int, default=800)
 parser.add_argument('--max_side', type=int, default=1333)
 
 args=parser.parse_args()
 
 cap = cv2.VideoCapture(args.input_path)
-ret, frame = cap.read()
+ret, first_frame = cap.read()
 model = models.load_model(args.model_path, backbone_name=args.backbone)
-labels_to_names = get_labels('data/classes.csv')
+classes = get_labels('data/classes.csv')
 writer = None
+trackers = get_trackers(classes)
+memory = {}
+counter = [0] * len(classes)
 
 cv2.namedWindow('Predictions', cv2.WINDOW_NORMAL)
 cv2.resizeWindow('Predictions', args.max_side,args.min_side)
@@ -62,11 +95,14 @@ if args.output_path:
 	fourcc = cv2.VideoWriter_fourcc(*"MP4V")
 	writer = cv2.VideoWriter(args.output_path, fourcc, 30, (frame.shape[1], frame.shape[0]), True)
 
+show_frame_and_get_line(first_frame)
+
 while ret:
 
 	ret, frame = cap.read()
-
 	draw = frame.copy()
+	previous = memory.copy()
+	memory = {}
 
 	frame = preprocess_image(frame)
 	frame, scale = resize_image(frame, min_side=args.min_side, max_side=args.max_side)
@@ -74,21 +110,43 @@ while ret:
 	start = time.time()
 	boxes, scores, labels = model.predict_on_batch(np.expand_dims(frame, axis=0))
 	print("processing time: ", time.time() - start)
+	print(counter)
 
+	boxes, scores, labels = boxes[0][scores[0]>args.conf], np.expand_dims(scores[0][scores[0]>args.conf], axis=1), labels[0][scores[0]>args.conf]
 	boxes /= scale
 
-	for box, score, label in zip(boxes[0], scores[0], labels[0]):
-		# scores are sorted so we can break
-		if score < 0.9:
-			break
+	dets = np.append(boxes,scores, axis=1)
+
+	cv2.line(draw, line[0], line[1], (0,255,255), 5)
+
+	for class_id in classes:
+		class_dets = dets[labels==class_id]
+	
+		if class_dets.size != 0:
+			tracks = trackers[class_id].update(class_dets)
+		else :
+			tracks = []
+
+		for box in tracks:
+			memory[classes[class_id]+str(box[4])] = box[0:4]
+
+			if classes[class_id]+str(box[4]) in previous:
+
+				prev_box = previous[classes[class_id]+str(box[4])]
+				(x2, y2) = (int(prev_box[0]), int(prev_box[1]))
+				(w2, h2) = (int(prev_box[2]), int(prev_box[3]))
+				p0 = (int(box[0] + (box[2]-box[0])/2), int(box[1] + (box[3]-box[1])/2))
+				p1 = (int(x2 + (w2-x2)/2), int(y2 + (h2-y2)/2))
+				cv2.line(draw, p0, p1, (255,255,255), 3)
+
+				if intersect(p0, p1, line[0], line[1]):
+					counter[class_id]+=1
+
+			b = box.astype(int)
+			draw_box(draw, b, color=(255,255,255))
 			
-		color = label_color(label)
-		
-		b = box.astype(int)
-		draw_box(draw, b, color=color)
-		
-		caption = "{} {:.3f}".format(labels_to_names[label], score)
-		draw_caption(draw, b, caption)
+			caption = "{} {}".format(classes[class_id], box[4])
+			draw_caption(draw, b, caption)
 
 	if writer:
 		writer.write(draw)
