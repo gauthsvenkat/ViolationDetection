@@ -112,6 +112,8 @@ while ret:
 	draw = frame.copy()
 	previous = memory.copy()
 	memory = {}
+	distance = 0
+	kmph = 0
 
 	frame = preprocess_image(frame)
 	frame, scale = resize_image(frame, min_side=args.min_side, max_side=args.max_side)
@@ -148,13 +150,16 @@ while ret:
 				p1 = (int(x2 + (w2-x2)/2), int(y2 + (h2-y2)/2))
 				cv2.line(draw, p0, p1, (255,255,255), 3)
 
+				distance = np.sqrt((p0[0] - p1[0])**2 + (p0[1] - p1[1])**2)
+				kmph = distance*fps*0.02*3.6
+
 				if intersect(p0, p1, line[0], line[1]):
 					counter[class_id]+=1
 
 			b = box.astype(int)
 			draw_box(draw, b, color=(255,255,255))
 			
-			caption = "{}".format(classes[class_id])
+			caption = "{} {:.1f} kmph".format(classes[class_id], kmph)
 			draw_caption(draw, b, caption)
 
 			draw_counter(draw, counter, classes)
