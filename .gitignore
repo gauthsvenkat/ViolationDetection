@@ -14,3 +14,4 @@ playground.ipynb
 build/
 *.pyd
 *.zip
+*.csv
