@@ -2,13 +2,11 @@ import csv
 from glob import glob
 import os
 
-get_cname = lambda name: name.lower().replace(' ', '') if name.lower() != 'scooter'.lower() else 'bike'
+get_cname = lambda name: name.lower().replace(' ', '')
 path = os.path.join('train', 'annotations', '*.csv')
 
 files = glob(path)
 class_name = []
-
-#import ipdb; ipdb.set_trace()
 
 for file in files:
 
