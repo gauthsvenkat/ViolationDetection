@@ -64,20 +64,28 @@ def show_frame_and_get_line(first_frame):
 			cv2.destroyWindow('Frame')
 			break
 
-def draw_counter(img, counter, classes):
+def draw_counter(img, counter, classes, overall=False):
 
-	for i, c in enumerate(counter):
-		text = "{}:{}".format(classes[i], counter[i])
-		cv2.putText(img, text, (100, 1400 - 100*i), 0, 3, (0, 0, 0), 4)
-		cv2.putText(img, text, (100, 1400 - 100*i), 0, 3, (255, 255, 255), 2)
+	if overall:
+		text = "{}:{}".format('Vehicles', sum(counter))
+		cv2.putText(img, text, (100, 1400), 0, 3, (0, 0, 0), 4)
+		cv2.putText(img, text, (100, 1400), 0, 3, (255, 255, 255), 2)
+
+	else:
+		for i, c in enumerate(counter):
+			text = "{}:{}".format(classes[i], counter[i])
+			cv2.putText(img, text, (100, 1400 - 100*i), 0, 3, (0, 0, 0), 4)
+			cv2.putText(img, text, (100, 1400 - 100*i), 0, 3, (255, 255, 255), 2)
 
 
 parser = argparse.ArgumentParser(description='Count vehicles on videos')
 parser.add_argument('input_path', type=str, help='Full input path to video')
 parser.add_argument('-o','--output_path', type=str, help='Full output path to predictions')
 parser.add_argument('-m', '--model_path', type=str, default='snapshots/inference_model.h5', help='Full path to trained model')
-parser.add_argument('-b', '--backbone', type=str, default='resnet50', help='Backbone name')
-parser.add_argument('--conf', type=float, default=0.9, help='Filter out prediciotns lesser than this confidence')
+parser.add_argument('-b', '--backbone', type=str, default='resnet152', help='Backbone name')
+parser.add_argument('--violation_save_location', type=str, default='violators/', help='Folder to store violations')
+parser.add_argument('--count_overall', action='store_true', help='specific count or overall count')
+parser.add_argument('--conf', type=float, default=0.9, help='Filter out predictions lesser than this confidence')
 parser.add_argument('--min_side', type=int, default=800)
 parser.add_argument('--max_side', type=int, default=1333)
 
@@ -96,7 +104,7 @@ writer = None
 trackers = get_trackers(classes)
 memory = {}
 counter = [0] * len(classes)
-
+frame_count = 1
 show_frame_and_get_line(first_frame)
 
 cv2.namedWindow('Predictions', cv2.WINDOW_NORMAL)
@@ -110,14 +118,15 @@ while ret:
 
 	ret, frame = cap.read()
 	draw = frame.copy()
+	frame_tensor = frame.copy()
 	previous = memory.copy()
 	memory = {}
 
-	frame = preprocess_image(frame)
-	frame, scale = resize_image(frame, min_side=args.min_side, max_side=args.max_side)
+	frame_tensor = preprocess_image(frame_tensor)
+	frame_tensor, scale = resize_image(frame_tensor, min_side=args.min_side, max_side=args.max_side)
 
 	start = time.time()
-	boxes, scores, labels = model.predict_on_batch(np.expand_dims(frame, axis=0))
+	boxes, scores, labels = model.predict_on_batch(np.expand_dims(frame_tensor, axis=0))
 	print("processing time: ", time.time() - start)
 
 
@@ -149,6 +158,11 @@ while ret:
 				cv2.line(draw, p0, p1, (255,255,255), 3)
 
 				if intersect(p0, p1, line[0], line[1]):
+					if class_id == 2:
+						b = box.astype(int)
+						roi = frame[b[1]:b[3], b[0]:b[2]]
+						cv2.imwrite(args.violation_save_location+str(frame_count)+'.jpg', roi)
+
 					counter[class_id]+=1
 
 			b = box.astype(int)
@@ -157,13 +171,13 @@ while ret:
 			caption = "{}".format(classes[class_id])
 			draw_caption(draw, b, caption)
 
-			draw_counter(draw, counter, classes)
+			draw_counter(draw, counter, classes, args.count_overall)
 
 	if writer:
 		writer.write(draw)
 
 	cv2.imshow('Predictions', draw)
-	if cv2.waitKey(25) == ord('q'):
+	if cv2.waitKey(10) == ord('q'):
 		cv2.destroyAllWindows()
 		cap.release()
 		
@@ -171,4 +185,6 @@ while ret:
 			writer.release()
 
 		break
+
+	frame_count+=1
 		
