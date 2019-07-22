@@ -9,6 +9,8 @@ import csv
 import argparse
 from sort import Sort
 
+import random
+
 import tensorflow as tf
 
 
@@ -27,6 +29,10 @@ def get_session():
 	config.gpu_options.allow_growth = True
 	return tf.Session(config=config)
 keras.backend.tensorflow_backend.set_session(get_session())
+
+def set_colors(length, seed=2506):
+	random.seed(seed)
+	return [(random.randint(0,255), random.randint(0,255), random.randint(0,255)) for i in range(length)]
 
 def get_labels(path):
 	labels = {}
@@ -82,6 +88,7 @@ parser = argparse.ArgumentParser(description='Count vehicles on videos')
 parser.add_argument('input_path', type=str, help='Full input path to video')
 parser.add_argument('-o','--output_path', type=str, help='Full output path to predictions')
 parser.add_argument('-m', '--model_path', type=str, default='snapshots/inference_model.h5', help='Full path to trained model')
+parser.add_argument('-c', '--class_path', type=str, default='data/classes.csv', help='Path to the classes csv file')
 parser.add_argument('-b', '--backbone', type=str, default='resnet152', help='Backbone name')
 parser.add_argument('--violation_save_location', type=str, default='violators/', help='Folder to store violations')
 parser.add_argument('--count_overall', action='store_true', help='specific count or overall count')
@@ -99,7 +106,8 @@ cap = cv2.VideoCapture(args.input_path)
 fps = cap.get(cv2.CAP_PROP_FPS)
 ret, first_frame = cap.read()
 model = models.load_model(args.model_path, backbone_name=args.backbone)
-classes = get_labels('data/classes.csv')
+classes = get_labels(args[class_path])
+class_color = set_colors(len(classes))
 writer = None
 trackers = get_trackers(classes)
 memory = {}
@@ -166,7 +174,7 @@ while ret:
 					counter[class_id]+=1
 
 			b = box.astype(int)
-			draw_box(draw, b, color=(255,255,255))
+			draw_box(draw, b, color=class_color[class_id])
 			
 			caption = "{}".format(classes[class_id])
 			draw_caption(draw, b, caption)
