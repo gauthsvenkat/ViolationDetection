@@ -9,6 +9,7 @@ import cv2
 
 from sort import Sort
 
+#Add project to PATH
 if __name__ == "__main__" and __package__ is None:
 	sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 	import keras_retinanet.bin  # noqa: F401
@@ -23,21 +24,22 @@ from ..utils.custom_utils import get_session, set_colors, get_labels, intersect,
 
 keras.backend.tensorflow_backend.set_session(get_session())
 
-
+#This function initializes trackers for each vehicle class
 def get_trackers(class_ids):
 	trackers = {}
 	for i in classes:
 		trackers[i] = Sort()
 	return trackers
 
+line = [] #This list stores a tuple of x,y coordinates. len(line) should always be even.
 
-line = []
-
+#This function gets called when a mouse event is encountered. Stores the x,y coordinates of a left click into a tuple.
 def get_coordinate(event,x,y,flags,param):
 	if event == cv2.EVENT_LBUTTONDOWN:
 		cv2.circle(first_frame, (x,y), 10, (0,0,255), 5)
 		line.append((x,y))
 
+#This function displays the first frame to get all the lines in the video.
 def show_frame_and_get_line(first_frame):
 	while True:
 		cv2.imshow('Frame', first_frame)
@@ -61,31 +63,36 @@ parser.add_argument('--max_side', type=int, default=1333)
 
 args=parser.parse_args()
 
+#Opens a window to display the first frame and resizes it to min_side and max_side
 cv2.namedWindow('Frame', cv2.WINDOW_NORMAL)
 cv2.resizeWindow('Frame', args.max_side, args.min_side)
-cv2.setMouseCallback('Frame', get_coordinate)
 
-cap = cv2.VideoCapture(args.input_path)
-fps = cap.get(cv2.CAP_PROP_FPS)
-ret, first_frame = cap.read()
-model = models.load_model(args.model_path, backbone_name=args.backbone)
-classes = get_labels(args.class_path)
-class_color = set_colors(len(classes))
-writer = None
-trackers = get_trackers(classes)
-memory = {}
-counter = [0] * len(classes)
-frame_count = 1
+cv2.setMouseCallback('Frame', get_coordinate) #Callback function to record mouse events
+
+cap = cv2.VideoCapture(args.input_path) #Initialize videocapture objects
+fps = cap.get(cv2.CAP_PROP_FPS) #Get FPS of the video
+ret, first_frame = cap.read() #Read first frame for getting lines
+model = models.load_model(args.model_path, backbone_name=args.backbone) #Load the inference model
+classes = get_labels(args.class_path) #Dictionary where key is the class name and value is the class_id
+class_color = set_colors(len(classes)) #Set some random colors for each class
+writer = None #Initialize VideoWriter object
+trackers = get_trackers(classes) #Initialize all the trackers
+memory = {} #Dictionary to store objects detected in previous frames where key is the class+object_id and value is the 4 bbox coordinates
+counter = [0] * len(classes) #A list that contains the unique counts of all the classes
+frame_count = 1 #Initialize frame count
 
 show_frame_and_get_line(first_frame)
 
+#Open the predictions window and resize it
 cv2.namedWindow('Predictions', cv2.WINDOW_NORMAL)
 cv2.resizeWindow('Predictions', args.max_side,args.min_side)
 
+#If output_path is not None, then initialize VideoWriter object to write predictions to MP4
 if args.output_path:
 	fourcc = cv2.VideoWriter_fourcc(*"MP4V")
 	writer = cv2.VideoWriter(args.output_path, fourcc, fps, (first_frame.shape[1], first_frame.shape[0]), True)
 
+#Keep looping while ret is True
 while ret:
 
 	ret, frame = cap.read()
@@ -94,52 +101,53 @@ while ret:
 	previous = memory.copy()
 	memory = {}
 
-	frame_tensor = preprocess_image(frame_tensor)
+	frame_tensor = preprocess_image(frame_tensor) #Convert frame to tensor
 	frame_tensor, scale = resize_image(frame_tensor, min_side=args.min_side, max_side=args.max_side)
 
 	start = time.time()
-	boxes, scores, labels = model.predict_on_batch(np.expand_dims(frame_tensor, axis=0))
+	boxes, scores, labels = model.predict_on_batch(np.expand_dims(frame_tensor, axis=0)) #Get the predictions from the model
 	print("processing time: ", time.time() - start)
 
-
+	#Convert the predictions to less cryptic shit and weed out predictions lower than args.conf
 	boxes, scores, labels = boxes[0][scores[0]>args.conf], np.expand_dims(scores[0][scores[0]>args.conf], axis=1), labels[0][scores[0]>args.conf]
-	boxes /= scale
+	boxes /= scale #Adjust to scale
 
-	dets = np.append(boxes,scores, axis=1)
+	dets = np.append(boxes,scores, axis=1) #dets is a (n, 5) array where first 4 columns are bbox coordinates and 5th column is confidence
 
-	[cv2.line(draw, line[x], line[x+1], (0,255,255), 5) for x in range(0, len(line), 2)]
+	[cv2.line(draw, line[x], line[x+1], (0,255,255), 5) for x in range(0, len(line), 2)] #Draw all the lines that were recorded in the beginning
 
-	for class_id in classes:
-		class_dets = dets[labels==class_id]
+	for class_id in classes: #For each class 
+		class_dets = dets[labels==class_id] #Only consider a particular class
 	
 		if class_dets.size != 0:
-			tracks = trackers[class_id].update(class_dets)
+			tracks = trackers[class_id].update(class_dets) #Update trackers if no detections
 		else :
-			tracks = []
+			tracks = [] #Else nevermind
 
-		for box in tracks:
-			memory[classes[class_id]+str(box[4])] = box[0:4]
+		for box in tracks: #For each box in tracks
+			memory[classes[class_id]+str(box[4])] = box[0:4] #Store the bbox in memory (to compare in the future)
 
-			if classes[class_id]+str(box[4]) in previous:
+			if classes[class_id]+str(box[4]) in previous: #Check if this object was in the previous frame
 
-				prev_box = previous[classes[class_id]+str(box[4])]
+				prev_box = previous[classes[class_id]+str(box[4])] #Get the bbox coordinates of the object in the previous frame
 				(x2, y2) = (int(prev_box[0]), int(prev_box[1]))
 				(w2, h2) = (int(prev_box[2]), int(prev_box[3]))
-				p0 = (int(box[0] + (box[2]-box[0])/2), int(box[1] + (box[3]-box[1])/2))
-				p1 = (int(x2 + (w2-x2)/2), int(y2 + (h2-y2)/2))
-				cv2.line(draw, p0, p1, (255,255,255), 3)
+				p0 = (int(box[0] + (box[2]-box[0])/2), int(box[1] + (box[3]-box[1])/2)) #Mid point of object in the previous frame
+				p1 = (int(x2 + (w2-x2)/2), int(y2 + (h2-y2)/2)) #Mid point of object in the current frame
+				cv2.line(draw, p0, p1, (255,255,255), 3) #Draw a trajectory line of the object 
 
+				#Check if the object intersects with any of the lines
 				vehicle_intersect = [intersect(p0, p1, line[x], line[x+1]) for x in range(0, len(line), 2)]
 
-				if any(vehicle_intersect):
-					if class_id == 2:
+				if any(vehicle_intersect): #If it does
+					if class_id == 2: #If Twowheelerwithouthelmet
 						b = box.astype(int)
 						roi = frame[b[1]:b[3], b[0]:b[2]]
-						cv2.imwrite(args.violation_save_location+str(frame_count)+'.jpg', roi)
+						cv2.imwrite(args.violation_save_location+str(frame_count)+'.jpg', roi) #Get a snap of the violators
 
-					counter[class_id]+=1
+					counter[class_id]+=1 #Increase count
 
-			b = box.astype(int)
+			b = box.astype(int) #Convert bbox to int
 			draw_box(draw, b, class_color[class_id])
 			
 			caption = "{}".format(classes[class_id])
@@ -158,7 +166,7 @@ while ret:
 		if writer:
 			writer.release()
 
-		count_write(counter, classes, args.count_save)
+		count_write(counter, classes, args.count_save) #Write the counts to a csv file
 
 		break
 

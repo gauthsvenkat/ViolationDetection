@@ -1,3 +1,5 @@
+#Script to generate pics for training from videos
+
 import argparse
 import os
 import cv2
@@ -9,7 +11,7 @@ parser.add_argument('-i', '--interval', help='intervals in which to take picture
 
 args = parser.parse_args()
 
-name = args.output_path+os.path.basename(os.path.splitext(args.input_path)[0])+"_sec{}.jpg"
+name = args.output_path+os.path.basename(os.path.splitext(args.input_path)[0])+"_sec{}.jpg" #Output file name for image (gotta fill the placeholder)
 
 if not os.path.isdir(args.output_path):
 	os.mkdir(args.output_path)

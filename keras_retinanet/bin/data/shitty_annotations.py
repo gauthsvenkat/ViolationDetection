@@ -1,3 +1,5 @@
+#Script to delete a shitty annotation and corresponding image
+
 import csv
 from glob import glob
 import os
@@ -17,7 +19,7 @@ def driver(path=None):
             data = csv.reader(f)
             next(data)
             for row in data:
-                if row[3] == row[4] == row[5] == row[6]:
+                if row[3] == row[4] == row[5] == row[6]: #Pretty cursed if x,y,w,h are all same
                     print("cursed ", path)
                     f.close()
                     os.remove(path)
