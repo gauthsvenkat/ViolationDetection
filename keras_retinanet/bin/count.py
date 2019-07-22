@@ -1,18 +1,13 @@
 import keras
 import sys
 
-import cv2
 import os
 import numpy as np
 import time
-import csv
 import argparse
+import cv2
+
 from sort import Sort
-
-import random
-
-import tensorflow as tf
-
 
 if __name__ == "__main__" and __package__ is None:
 	sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -23,27 +18,11 @@ from .. import models
 from ..utils.image import read_image_bgr, preprocess_image, resize_image
 from ..utils.visualization import draw_box, draw_caption
 from ..utils.colors import label_color
+from ..utils.custom_utils import get_session, set_colors, get_labels, intersect, draw_counter, count_write
 
-def get_session():
-	config = tf.ConfigProto()
-	config.gpu_options.allow_growth = True
-	return tf.Session(config=config)
+
 keras.backend.tensorflow_backend.set_session(get_session())
 
-def set_colors(length, seed=2506):
-	random.seed(seed)
-	return [(random.randint(0,255), random.randint(0,255), random.randint(0,255)) for i in range(length)]
-
-def get_labels(path):
-	labels = {}
-
-	with open(path,'r') as f:
-		data=csv.reader(f)
-		for row in data:
-			labels[int(row[1])] = row[0]
-	f.close()
-
-	return labels
 
 def get_trackers(class_ids):
 	trackers = {}
@@ -51,13 +30,9 @@ def get_trackers(class_ids):
 		trackers[i] = Sort()
 	return trackers
 
-def intersect(A,B,C,D):
-	return ccw(A,C,D) != ccw(B,C,D) and ccw(A,B,C) != ccw(A,B,D)
-
-def ccw(A,B,C):
-	return (C[1]-A[1]) * (B[0]-A[0]) > (B[1]-A[1]) * (C[0]-A[0])
 
 line = []
+
 def get_coordinate(event,x,y,flags,param):
 	if event == cv2.EVENT_LBUTTONDOWN:
 		cv2.circle(first_frame, (x,y), 10, (0,0,255), 5)
@@ -70,19 +45,6 @@ def show_frame_and_get_line(first_frame):
 			cv2.destroyWindow('Frame')
 			break
 
-def draw_counter(img, counter, classes, overall=False):
-
-	if overall:
-		text = "{}:{}".format('Vehicles', sum(counter))
-		cv2.putText(img, text, (100, 1400), 0, 3, (0, 0, 0), 4)
-		cv2.putText(img, text, (100, 1400), 0, 3, (255, 255, 255), 2)
-
-	else:
-		for i, c in enumerate(counter):
-			text = "{}:{}".format(classes[i], counter[i])
-			cv2.putText(img, text, (100, 1400 - 100*i), 0, 3, (0, 0, 0), 4)
-			cv2.putText(img, text, (100, 1400 - 100*i), 0, 3, (255, 255, 255), 2)
-
 
 parser = argparse.ArgumentParser(description='Count vehicles on videos')
 parser.add_argument('input_path', type=str, help='Full input path to video')
@@ -90,7 +52,8 @@ parser.add_argument('-o','--output_path', type=str, help='Full output path to pr
 parser.add_argument('-m', '--model_path', type=str, default='snapshots/inference_model.h5', help='Full path to trained model')
 parser.add_argument('-c', '--class_path', type=str, default='data/classes.csv', help='Path to the classes csv file')
 parser.add_argument('-b', '--backbone', type=str, default='resnet152', help='Backbone name')
-parser.add_argument('--violation_save_location', type=str, default='violators/', help='Folder to store violations')
+parser.add_argument('--count_save', type=str, default='output/count.csv')
+parser.add_argument('--violation_save_location', type=str, default='output/violators/', help='Folder to store violations')
 parser.add_argument('--count_overall', action='store_true', help='specific count or overall count')
 parser.add_argument('--conf', type=float, default=0.9, help='Filter out predictions lesser than this confidence')
 parser.add_argument('--min_side', type=int, default=800)
@@ -106,13 +69,14 @@ cap = cv2.VideoCapture(args.input_path)
 fps = cap.get(cv2.CAP_PROP_FPS)
 ret, first_frame = cap.read()
 model = models.load_model(args.model_path, backbone_name=args.backbone)
-classes = get_labels(args[class_path])
+classes = get_labels(args.class_path)
 class_color = set_colors(len(classes))
 writer = None
 trackers = get_trackers(classes)
 memory = {}
 counter = [0] * len(classes)
 frame_count = 1
+
 show_frame_and_get_line(first_frame)
 
 cv2.namedWindow('Predictions', cv2.WINDOW_NORMAL)
@@ -143,7 +107,7 @@ while ret:
 
 	dets = np.append(boxes,scores, axis=1)
 
-	cv2.line(draw, line[0], line[1], (0,255,255), 5)
+	[cv2.line(draw, line[x], line[x+1], (0,255,255), 5) for x in range(0, len(line), 2)]
 
 	for class_id in classes:
 		class_dets = dets[labels==class_id]
@@ -165,7 +129,9 @@ while ret:
 				p1 = (int(x2 + (w2-x2)/2), int(y2 + (h2-y2)/2))
 				cv2.line(draw, p0, p1, (255,255,255), 3)
 
-				if intersect(p0, p1, line[0], line[1]):
+				vehicle_intersect = [intersect(p0, p1, line[x], line[x+1]) for x in range(0, len(line), 2)]
+
+				if any(vehicle_intersect):
 					if class_id == 2:
 						b = box.astype(int)
 						roi = frame[b[1]:b[3], b[0]:b[2]]
@@ -174,12 +140,12 @@ while ret:
 					counter[class_id]+=1
 
 			b = box.astype(int)
-			draw_box(draw, b, color=class_color[class_id])
+			draw_box(draw, b, class_color[class_id])
 			
 			caption = "{}".format(classes[class_id])
-			draw_caption(draw, b, caption)
+			draw_caption(draw, b, caption, class_color[class_id])
 
-			draw_counter(draw, counter, classes, args.count_overall)
+			draw_counter(draw, counter, classes, class_color, args.count_overall)
 
 	if writer:
 		writer.write(draw)
@@ -191,6 +157,8 @@ while ret:
 		
 		if writer:
 			writer.release()
+
+		count_write(counter, classes, args.count_save)
 
 		break
 
