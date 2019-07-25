@@ -29,23 +29,33 @@ def ccw(A,B,C):
 def intersect(A,B,C,D):
 	return ccw(A,C,D) != ccw(B,C,D) and ccw(A,B,C) != ccw(A,B,D)
 
-def draw_counter(img, counter, classes, class_color, overall=False):
+def draw_counter(img, counter_dict, classes, class_color, overall=False):
 
-	if overall:
-		text = "{}:{}".format('Vehicles', sum(counter))
-		cv2.putText(img, text, (100, 1400), 0, 3, (0, 0, 0), 4)
-		cv2.putText(img, text, (100, 1400), 0, 3, (255, 255, 255), 2)
+	x_orig = 100
 
-	else:
-		for i, c in enumerate(counter):
-			text = "{}:{}".format(classes[i], counter[i])
-			cv2.putText(img, text, (100, 1400 - 100*i), 0, 3, (0, 0, 0), 4)
-			cv2.putText(img, text, (100, 1400 - 100*i), 0, 3, class_color[i], 2)
+	for line_count, (line, counter) in enumerate(counter_dict.items()):
+		y_orig = 1400
 
-def count_write(counter, classes, location):
+		if overall:
+			text = "{}:{}".format('Vehicles', sum(counter))
+			cv2.putText(img, text, (x_orig, y_orig), 0, 1, (255, 255, 255), 2)
+			x_orig+=500
+
+		else:
+			for i, c in enumerate(counter):
+				text = "{}:{}".format(classes[i], counter[i])
+				cv2.putText(img, text, (x_orig, y_orig), 0, 1, class_color[i], 2)
+				y_orig-=50
+			cv2.putText(img, line, (x_orig, y_orig), 0, 1, class_color[i], 2)
+			x_orig+=500
+
+def count_write(counter_dict, classes, location):
 	with open(location, 'w') as f:
 		wr = csv.writer(f)
-		for i, count in enumerate(counter):
-			wr.writerow([classes[i], count])
-		wr.writerow(['Overall', sum(counter)])
+		for line, counter in counter_dict.items():
+			wr.writerow([line])
+			for i, count in enumerate(counter):
+				wr.writerow([classes[i], count])
+			wr.writerow(['Overall', sum(counter)])
+			[wr.writerow(['']) for _ in range(2)]
 		f.close

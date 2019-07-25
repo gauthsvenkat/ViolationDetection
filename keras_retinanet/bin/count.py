@@ -78,10 +78,15 @@ class_color = set_colors(len(classes)) #Set some random colors for each class
 writer = None #Initialize VideoWriter object
 trackers = get_trackers(classes) #Initialize all the trackers
 memory = {} #Dictionary to store objects detected in previous frames where key is the class+object_id and value is the 4 bbox coordinates
-counter = [0] * len(classes) #A list that contains the unique counts of all the classes
+counter = {} #A dict that contains the unique counts of all the classes for all the lines
 frame_count = 1 #Initialize frame count
 
 show_frame_and_get_line(first_frame)
+
+#Initialize the counter for all the lines
+for i in range(len(line)//2):
+	counter['line'+str(i)] = [0] * len(classes)
+
 
 #Open the predictions window and resize it
 cv2.namedWindow('Predictions', cv2.WINDOW_NORMAL)
@@ -137,15 +142,14 @@ while ret:
 				cv2.line(draw, p0, p1, (255,255,255), 3) #Draw a trajectory line of the object 
 
 				#Check if the object intersects with any of the lines
-				vehicle_intersect = [intersect(p0, p1, line[x], line[x+1]) for x in range(0, len(line), 2)]
 
-				if any(vehicle_intersect): #If it does
-					if class_id == 2: #If Twowheelerwithouthelmet
-						b = box.astype(int)
-						roi = frame[b[1]:b[3], b[0]:b[2]]
-						cv2.imwrite(args.violation_save_location+str(frame_count)+'.jpg', roi) #Get a snap of the violators
-
-					counter[class_id]+=1 #Increase count
+				for i in range(0, len(line), 2):
+					if intersect(p0, p1, line[i], line[i+1]):
+						counter['line'+str(i//2)][class_id]+=1
+						if class_id == 2: #If Twowheelerwithouthelmet
+							b = box.astype(int)
+							roi = frame[b[1]:b[3], b[0]:b[2]]
+							cv2.imwrite(args.violation_save_location+str(frame_count)+'.jpg', roi) #Get a snap of the violators
 
 			b = box.astype(int) #Convert bbox to int
 			draw_box(draw, b, class_color[class_id])
@@ -171,4 +175,3 @@ while ret:
 		break
 
 	frame_count+=1
-		
