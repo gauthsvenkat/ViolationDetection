@@ -80,6 +80,7 @@ trackers = get_trackers(classes) #Initialize all the trackers
 memory = {} #Dictionary to store objects detected in previous frames where key is the class+object_id and value is the 4 bbox coordinates
 counter = {} #A dict that contains the unique counts of all the classes for all the lines
 frame_count = 1 #Initialize frame count
+bad_classes = [0,5]
 
 show_frame_and_get_line(first_frame)
 
@@ -146,7 +147,7 @@ while ret:
 				for i in range(0, len(line), 2):
 					if intersect(p0, p1, line[i], line[i+1]):
 						counter['line'+str(i//2)][class_id]+=1
-						if class_id == 2: #If Twowheelerwithouthelmet
+						if class_id in bad_classes: #If violation classes (Triples and withouthelmet for now)
 							b = box.astype(int)
 							roi = frame[b[1]:b[3], b[0]:b[2]]
 							cv2.imwrite(args.violation_save_location+str(frame_count)+'.jpg', roi) #Get a snap of the violators
