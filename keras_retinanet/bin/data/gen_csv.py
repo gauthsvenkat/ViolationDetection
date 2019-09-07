@@ -5,7 +5,7 @@ from glob import glob
 import os
 
 tcast = lambda x: int(round(float(x)))
-anno2img = lambda anno: os.path.join(anno.replace('annotations', 'images').replace('.csv', '')) #To convert anno location to image location (full path)
+anno2img = lambda anno: os.path.join(anno.replace('annotations', 'images').replace('.csv', '.jpg')) #To convert anno location to image location (full path)
 class_name = lambda name: name.lower().replace(' ', '')
 
 def driver(mode=None):
