@@ -38,11 +38,11 @@ def get_labels(path):
 
 	return labels
 
-parser = argparse.ArgumentParser(description='Detect vehicles on videos')
+parser = argparse.ArgumentParser(description='Detect people in shops')
 parser.add_argument('input_path', type=str, help='Full input path to video')
 parser.add_argument('-o','--output_path', type=str, help='Full output path to predictions')
 parser.add_argument('-m', '--model_path', type=str, default='snapshots/inference_model.h5', help='Full path to trained model')
-parser.add_argument('-b', '--backbone', type=str, default='resnet152', help='Backbone name')
+parser.add_argument('-b', '--backbone', type=str, default='resnet50', help='Backbone name')
 parser.add_argument('--min_side', type=int, default=800)
 parser.add_argument('--max_side', type=int, default=1333)
 
