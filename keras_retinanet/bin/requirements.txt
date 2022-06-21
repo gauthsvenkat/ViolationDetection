@@ -5,7 +5,7 @@ opencv_python==4.0.0.21
 scikit_image==0.15.0
 Keras==2.2.4
 scipy==1.2.1
-numpy==1.16.2
+numpy==1.22.0
 matplotlib==3.0.3
 callbacks==0.3.0
 asposebarcode==1.0.0
